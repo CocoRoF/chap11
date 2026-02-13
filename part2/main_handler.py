@@ -12,7 +12,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 # custom tools
 from src.code_interpreter import CodeInterpreterClient
-from tools.code_interpreter import code_interpreter_tool
+from tools.code_interpreter import code_interpreter_tool, set_code_interpreter_client
 from tools.bigquery import BigQueryClient
 
 from youngjin_langchain_tools import StreamlitLanggraphHandler
@@ -50,6 +50,7 @@ def init_page():
         st.session_state.messages = [{"role": "assistant", "content": welcome_message}]
         # 대화가 리셋될 때 Code Interpreter의 세션도 다시 생성
         st.session_state.code_interpreter_client = CodeInterpreterClient()
+        set_code_interpreter_client(st.session_state.code_interpreter_client)
         st.session_state["checkpointer"] = InMemorySaver()
         st.session_state["thread_id"] = str(uuid7())
         st.session_state.custom_system_prompt = load_system_prompt(
@@ -76,7 +77,7 @@ def create_data_analysis_agent(bq_client):
         code_interpreter_tool,
     ]
     llm = select_model()
-    
+
     agent = create_agent(
         model=llm,
         tools=tools,
@@ -84,7 +85,7 @@ def create_data_analysis_agent(bq_client):
         checkpointer=st.session_state["checkpointer"],
         debug=True,
     )
-    
+
     return agent
 
 

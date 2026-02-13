@@ -1,6 +1,16 @@
-import streamlit as st
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
+
+
+# 모듈 레벨 변수 - LangGraph가 별도 스레드에서 tool을 실행하므로
+# st.session_state 대신 이 변수를 통해 client에 접근
+_code_interpreter_client = None
+
+
+def set_code_interpreter_client(client):
+    """main.py에서 세션 초기화 시 호출하여 client를 설정"""
+    global _code_interpreter_client
+    _code_interpreter_client = client
 
 
 class ExecPythonInput(BaseModel):
@@ -28,9 +38,7 @@ def code_interpreter_tool(code):
     - files: Code Interpreter가 저장한 파일의 경로
         - 파일은 `./files/` 아래에 저장됩니다.
     """
-    # 단순 로그 출력
     print("\n\n=== Executing Code ===")
     print(code)
     print("=====================\n\n")
-
-    return st.session_state.code_interpreter_client.run(code)
+    return _code_interpreter_client.run(code)
