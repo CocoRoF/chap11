@@ -83,7 +83,7 @@ class CodeInterpreterClient:
     def run(self, code):
 
         prompt = f"""
-        다음 코드를 실행하고 결과를 반환해 주세요. 
+        다음 코드를 실행하고 결과를 반환해 주세요.
         ```python
         {code}
         ```
