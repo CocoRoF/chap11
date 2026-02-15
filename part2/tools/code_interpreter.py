@@ -1,5 +1,6 @@
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
+import json
 
 
 # 모듈 레벨 변수 - LangGraph가 별도 스레드에서 tool을 실행하므로
@@ -22,23 +23,30 @@ class ExecPythonInput(BaseModel):
 @tool(args_schema=ExecPythonInput)
 def code_interpreter_tool(code):
     """
-    Code Interpreter를 사용하여 Python 코드를 실행합니다.
-    - 아래와 같은 작업에 적합합니다.
-      - pandas 및 matplotlib 등의 라이브러리를 사용한 데이터 가공 및 시각화
-      - 수식 계산 및 통계 분석
-      - 자연어 처리 라이브러리를 활용한 텍스트 데이터 분석도 가능
-    - Code Interpreter는 인터넷에 연결되지 않습니다
-      - 외부 웹사이트 정보를 읽거나 새 라이브러리를 설치할 수 없습니다
-    - Code Interpreter가 작성한 코드를 함께 출력하도록 요구하면 좋습니다
-      - 결과 검증을 사용자가 더 쉽게 할 수 있습니다
-    - 어느 정도 코드가 틀려도 자동으로 수정해줄 때가 있습니다
+    Code Interpreter를 사용해 Python 코드를 실행합니다.
+    (Responses API 기반 - 새로운 마이그레이션 버전)
+
+    - 데이터 가공, 시각화, 수식 계산, 통계 분석, 텍스트 분석에 적합합니다.
+    - 인터넷 연결이 없어 외부 사이트 접근이나 라이브러리 설치는 불가합니다.
+    - 코드 실행 결과와 생성 파일을 함께 확인할 수 있습니다.
+
+    오류 발생 시:
+    - 같은 코드를 반복하지 말고 다른 접근법 시도
+    - seaborn 오류 → matplotlib 또는 pandas.plot 사용
+    - 최대 2회 시도 후 사용자에게 보고
 
     Returns:
-    - text: Code Interpreter가 출력한 텍스트 (주로 코드 실행 결과)
-    - files: Code Interpreter가 저장한 파일의 경로
-        - 파일은 `./files/` 아래에 저장됩니다.
+    - text: Code Interpreter의 코드 실행 결과
+    - files: Code Interpreter가 생성한 파일 경로 (`./files/` 이하)
     """
-    print("\n\n=== Executing Code ===")
+    print("\n\n=== Executing Code (Responses API) ===")
     print(code)
-    print("=====================\n\n")
-    return _code_interpreter_client.run(code)
+    print("======================================\n\n")
+
+    text_result, file_names = _code_interpreter_client.run(code)
+
+    # 결과를 명확한 형식으로 포맷팅
+    if file_names:
+        return json.dumps([text_result, file_names], ensure_ascii=False)
+    else:
+        return json.dumps([text_result, []], ensure_ascii=False)

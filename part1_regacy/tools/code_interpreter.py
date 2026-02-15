@@ -23,7 +23,6 @@ class ExecPythonInput(BaseModel):
 def code_interpreter_tool(code):
     """
     Code Interpreter를 사용해 Python 코드를 실행합니다.
-    (Responses API 기반 - 새로운 마이그레이션 버전)
 
     - 데이터 가공, 시각화, 수식 계산, 통계 분석, 텍스트 분석에 적합합니다.
     - 인터넷 연결이 없어 외부 사이트 접근이나 라이브러리 설치는 불가합니다.
@@ -33,7 +32,7 @@ def code_interpreter_tool(code):
     - text: Code Interpreter의 코드 실행 결과
     - files: Code Interpreter가 생성한 파일 경로 (`./files/` 이하)
     """
-    print("\n\n=== Executing Code (Responses API) ===")
+    print("\n\n=== Executing Code ===")
     print(code)
-    print("======================================\n\n")
+    print("=====================\n\n")
     return _code_interpreter_client.run(code)
