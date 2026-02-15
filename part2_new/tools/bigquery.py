@@ -5,7 +5,7 @@ from google.cloud import bigquery
 from google.oauth2 import service_account
 from langchain_core.tools import Tool, StructuredTool
 from pydantic import BaseModel, Field
-from src.code_interpreter import CodeInterpreterClient
+from src.code_interpreter_new import CodeInterpreterClient
 
 
 class SqlTableInfoInput(BaseModel):
@@ -18,12 +18,17 @@ class ExecSqlInput(BaseModel):
 
 
 class BigQueryClient:
+    """
+    BigQuery 클라이언트 (Responses API 기반)
+
+    Assistants API에서 Responses API로 마이그레이션된 Code Interpreter를 사용합니다.
+    """
     def __init__(
         self,
         code_interpreter: CodeInterpreterClient,
         project_id: str = "youtube-api-client-480202",  ## 이 부분은 자신이 등록한 구글 클라우드 프로젝트 이름으로 변경
         # "bigquery-public-data"란?
-        # Google이 공개해 둔 “공공 데이터(public dataset)”
+        # Google이 공개해 둔 "공공 데이터(public dataset)"
         # Google Trends(검색 트렌드) 데이터
         # 국가별 급상승 검색어
         # 주차(week), 점수(score), 검색어(term) 등
@@ -59,19 +64,24 @@ class BigQueryClient:
         return query_job.result().to_dataframe(create_bqstorage_client=True)
 
     def exec_query_and_upload(self, query: str, limit: int = None) -> str:
-        """Execute given SQL query and return result as a formatted string or path to a saved file."""
+        """
+        Execute given SQL query and return result as a formatted string or path to a saved file.
+
+        Responses API 기반으로 업데이트됨: 파일 업로드 경로가 Container 기반으로 변경
+        """
         try:
             df = self._exec_query(query, limit)
             csv_data = df.to_csv().encode("utf-8")
-            assistant_api_path = self.code_interpreter.upload_file(csv_data)
-            return f"sql:\n```\n{query}\n```\n\nsample results:\n{df.head()}\n\nfull result was uploaded to /mnt/{assistant_api_path} (Assistants API File)"
+            file_id = self.code_interpreter.upload_file(csv_data)
+            # Responses API에서는 Container를 사용하므로 파일 경로가 다를 수 있음
+            return f"sql:\n```\n{query}\n```\n\nsample results:\n{df.head()}\n\nfull result was uploaded with File ID: {file_id} (accessible in Code Interpreter)"
         except Exception as e:
             return f"SQL execution failed. Error message is as follows:\n```\n{e}\n```"
 
     def _generate_sql_for_table_info(self, table_name: str) -> tuple:
         """지정된 테이블의 스키마와 샘플 데이터를 가져오는 SQL 생성"""
         get_schema_sql = f"""
-        SELECT 
+        SELECT
             TO_JSON_STRING(
                 ARRAY_AGG(
                     STRUCT(
@@ -137,6 +147,7 @@ class BigQueryClient:
 
         샘플 외의 전체 결과는 Code Interpreter에 CSV 파일로 저장됩니다.
         Code Interpreter에서 Python을 실행하여 접근할 수 있습니다.
+        (Responses API 기반)
         """
         return StructuredTool.from_function(
             name="exec_query",
