@@ -5,7 +5,7 @@ from google.cloud import bigquery
 from google.oauth2 import service_account
 from langchain_core.tools import Tool, StructuredTool
 from pydantic import BaseModel, Field
-from src.code_interpreter_new import CodeInterpreterClient
+from src.code_interpreter import CodeInterpreterClient
 
 
 class SqlTableInfoInput(BaseModel):

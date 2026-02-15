@@ -1,4 +1,4 @@
-# GitHub: https://github.com/naotaka1128/llm_app_codes/chapter_011/part2/src/code_interpreter_new.py
+# GitHub: https://github.com/naotaka1128/llm_app_codes/chapter_011/part2/src/code_interpreter.py
 
 import os
 import traceback
@@ -27,7 +27,7 @@ class CodeInterpreterClient:
 
     Example:
     ===============
-    from src.code_interpreter_new import CodeInterpreterClient
+    from src.code_interpreter import CodeInterpreterClient
     code_interpreter = CodeInterpreterClient()
     code_interpreter.upload_file(open('file.csv', 'rb').read())
     code_interpreter.run("file.csv의 내용을 읽어서 그래프를 그려주세요")
