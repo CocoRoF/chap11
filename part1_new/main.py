@@ -41,10 +41,10 @@ def csv_upload():
         submitted = st.form_submit_button("Upload CSV")
         if submitted and file is not None:
             if not file.name in st.session_state.uploaded_files:
-                assistant_api_file_id = (
-                    st.session_state.code_interpreter_client.upload_file(file.read())
+                uploaded_filename = (
+                    st.session_state.code_interpreter_client.upload_file(file.read(), file.name)
                 )
-                st.session_state.custom_system_prompt += f"\n업로드한 파일명: {file.name} (Code Interpreter에서의 path: /mnt/data/{assistant_api_file_id})\n"
+                st.session_state.custom_system_prompt += f"\n업로드한 파일명: {uploaded_filename} (Code Interpreter에서의 path: /mnt/user-data/uploads/{uploaded_filename})\n"
                 st.session_state.uploaded_files.append(file.name)
         else:
             st.write("데이터 분석하고 싶은 파일을 업로드해줘")

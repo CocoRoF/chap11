@@ -62,20 +62,22 @@ class CodeInterpreterClient:
         )
         return container.id
 
-    def upload_file(self, file_content):
+    def upload_file(self, file_content, filename="uploaded_file.csv"):
         """
-        Upload file to OpenAI and register it with the container
+        Upload file to Container for Code Interpreter
         Args:
-            file_content: File content from open('file.csv', 'rb').read()
+            file_content: File content (bytes)
+            filename: Original filename to preserve in container
         Returns:
-            file_id: The ID of the uploaded file
+            filename: The filename accessible in container
         """
-        file = self.openai_client.files.create(
-            file=file_content,
-            purpose="assistants"
+        # Container에 파일 직접 업로드 (Responses API 방식)
+        container_file = self.openai_client.containers.files.create(
+            container_id=self.container_id,
+            file=(filename, file_content),
         )
-        self.file_ids.append(file.id)
-        return file.id
+        self.file_ids.append(container_file.id)
+        return filename  # Container 내에서 접근 가능한 파일명 반환
 
     def run(self, code):
         """
