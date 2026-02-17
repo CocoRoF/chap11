@@ -64,14 +64,14 @@ class BigQueryClient:
             df = self._exec_query(query, limit)
             csv_data = df.to_csv().encode("utf-8")
             assistant_api_path = self.code_interpreter.upload_file(csv_data)
-            return f"sql:\n```\n{query}\n```\n\nsample results:\n{df.head()}\n\nfull result was uploaded to /mnt/{assistant_api_path} (Assistants API File)"
+            return f"sql:\n```\n{query}\n```\n\nsample results:\n{df.head()}\n\nfull result was uploaded to /mnt/data/{assistant_api_path} (Assistants API File)"
         except Exception as e:
             return f"SQL execution failed. Error message is as follows:\n```\n{e}\n```"
 
     def _generate_sql_for_table_info(self, table_name: str) -> tuple:
         """지정된 테이블의 스키마와 샘플 데이터를 가져오는 SQL 생성"""
         get_schema_sql = f"""
-        SELECT 
+        SELECT
             TO_JSON_STRING(
                 ARRAY_AGG(
                     STRUCT(

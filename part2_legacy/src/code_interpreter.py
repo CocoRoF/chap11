@@ -1,10 +1,11 @@
 # GitHub: https://github.com/naotaka1128/llm_app_codes/chapter_011/part2/src/code_interpreter.py
 
 import os
-import magic
 import traceback
-import mimetypes
 from openai import OpenAI
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class CodeInterpreterClient:
@@ -40,6 +41,8 @@ class CodeInterpreterClient:
         다시 한 번 반복합니다, 실행한 결과를 반환해주세요.
         파일 경로 등이 조금 틀려 있는 경우 적절히 수정해주세요.
         수정한 경우에는 수정한 내용을 설명해주세요.
+        파일을 생성하거나 저장한 경우, 반드시 마크다운 링크 형식으로 경로를 표시해주세요.
+        예: [파일명](sandbox:/mnt/data/파일명)
         """
 
     def _create_file_directory(self):
@@ -134,14 +137,14 @@ class CodeInterpreterClient:
             }
         )
 
-    def run(self, code):
+    def run(self, code, max_retries=2):
         """
         Assistants API Response Example
         ===============
         Message(id='msg_mzx4vA5cS8kuzLfpeALC049M', assistant_id=None, attachments=[], completed_at=None, content=[TextContentBlock(text=Text(annotations=[], value='I need to solve the equation `3x + 11 = 14`. Can you help me?'), type='text')], created_at=1713526391, incomplete_at=None, incomplete_details=None, metadata={}, object='thread.message', role='user', run_id=None, status=None, thread_id='thread_dmhWy82iU3S97MMdWk5Bzkc7')
         Run(id='run_ox2vsSkPB0VMViuMOnVXGlzH', assistant_id='asst_tXog4eZKOLIal42dO5nQQISB', cancelled_at=None, completed_at=1713526496, created_at=1713526488, expires_at=None, failed_at=None, incomplete_details=None, instructions='Please address the user as Jane Doe. The user has a premium account.', last_error=None, max_completion_tokens=None, max_prompt_tokens=None, metadata={}, model='gpt-4o', object='thread.run', required_action=None, response_format='auto', started_at=1713526489, status='completed', thread_id='thread_dmhWy82iU3S97MMdWk5Bzkc7', tool_choice='auto', tools=[CodeInterpreterTool(type='code_interpreter')], truncation_strategy=TruncationStrategy(type='auto', last_messages=None), usage=Usage(completion_tokens=151, prompt_tokens=207, total_tokens=358), temperature=1.0, top_p=1.0, tool_resources={})
 
-        
+
         >> message
         SyncCursorPage[Message](
             data=[
@@ -190,50 +193,81 @@ class CodeInterpreterClient:
         """
 
         prompt = f"""
-        아래 코드를 실행하고 결과를 반환해주세요.
-        파일 읽기 등이 실패한 경우, 가능한 범위에서 수정 후 다시 실행해주세요.
+        다음 코드를 실행하고 결과를 반환해 주세요.
         ```python
         {code}
         ```
-        당신의 견해나 감상은 필요하지 않으니 코드 실행 결과만 반환해주세요
+        **중요 규칙**:
+        - 코드 실행 결과를 반환해주세요
+        - 파일을 생성한 경우, 반드시 해당 파일의 sandbox 경로를 언급해주세요
+        - 이미지를 생성한 경우에도 경로를 포함해주세요 (예: sandbox:/mnt/data/output.png)
         """
 
-        # add message to thread
-        self.openai_client.beta.threads.messages.create(
-            thread_id=self.thread_id,
-            role="user",
-            content=prompt
-        )
-
-        # run assistant to get response
-        run = self.openai_client.beta.threads.runs.create_and_poll(
-            thread_id=self.thread_id,
-            assistant_id=self.assistant_id,
-            instructions=self.code_intepreter_instruction
-        )
-        if run.status == 'completed': 
-            message = self.openai_client.beta.threads.messages.list(
+        for attempt in range(max_retries + 1):
+            # add message to thread
+            self.openai_client.beta.threads.messages.create(
                 thread_id=self.thread_id,
-                limit=1  # Get the last message
+                role="user",
+                content=prompt
             )
-            try:
-                file_ids = []
-                for content in message.data[0].content:
-                    if content.type == "text":
-                        text_content = content.text.value
-                        file_ids.extend([
-                            annotation.file_path.file_id
-                            for annotation in content.text.annotations
-                        ])
-                    elif content.type == "image_file":
-                        file_ids.append(content.image_file.file_id)
-                    else:
-                        raise ValueError("Unknown content type")
-            except:
-                print(traceback.format_exc())
-                return None, None
-        else:
-            raise ValueError("Run failed")
+
+            # run assistant to get response
+            run = self.openai_client.beta.threads.runs.create_and_poll(
+                thread_id=self.thread_id,
+                assistant_id=self.assistant_id,
+                instructions=self.code_intepreter_instruction
+            )
+            if run.status == 'completed':
+                break
+            elif run.status == "failed":
+                error_msg = getattr(run, 'last_error', None)
+                print(f"[Run Status] {run.status} (attempt {attempt + 1}/{max_retries + 1})")
+                print(f"[Run Error] {error_msg}")
+                if attempt < max_retries:
+                    import time
+                    print(f"  재시도 대기 중 (3초)...")
+                    time.sleep(3)
+                    self.thread_id = self._create_thread()
+                    continue
+                else:
+                    raise ValueError(f"Run failed with status: {run.status}, error: {error_msg}")
+            else:
+                error_msg = getattr(run, 'last_error', None)
+                raise ValueError(f"Run ended with unexpected status: {run.status}, error: {error_msg}")
+
+        # run.status == "completed" 인 경우에만 여기에 도달
+        message = self.openai_client.beta.threads.messages.list(
+            thread_id=self.thread_id,
+            limit=1  # Get the last message
+        )
+        try:
+            msg = message.data[0]
+            file_ids = []
+            text_content = ""
+
+            # 1) content blocks에서 text와 file_id 추출
+            for content in msg.content:
+                if content.type == "text":
+                    text_content = content.text.value
+                    for annotation in content.text.annotations:
+                        file_path = getattr(annotation, "file_path", None)
+                        file_id = getattr(file_path, "file_id", None)
+                        if file_id:
+                            file_ids.append(file_id)
+                elif content.type == "image_file":
+                    image_file_id = getattr(content.image_file, "file_id", None)
+                    if image_file_id:
+                        file_ids.append(image_file_id)
+
+            # 2) attachments에서도 file_id 추출 (annotation이 누락될 수 있으므로)
+            if hasattr(msg, "attachments") and msg.attachments:
+                for attachment in msg.attachments:
+                    att_file_id = getattr(attachment, "file_id", None)
+                    if att_file_id and att_file_id not in file_ids:
+                        file_ids.append(att_file_id)
+        except:
+            print(traceback.format_exc())
+            return None, None
 
         file_names = []
         if file_ids:
@@ -246,18 +280,29 @@ class CodeInterpreterClient:
         data = self.openai_client.files.content(file_id)
         data_bytes = data.read()
 
-        # 파일 내용에서 MIME 타입을 가져옴
-        mime_type = magic.from_buffer(data_bytes, mime=True)
-
-        # MIME 타입에서 확장자를 가져옴
-        extension = mimetypes.guess_extension(mime_type)
-
-        # 확장자를 가져올 수 없는 경우 기본 확장자를 사용
-        if not extension:
-            extension = ""
+        # 파일 내용의 시그니처로 확장자 결정
+        extension = self._detect_extension(data_bytes)
 
         file_name = f"./files/{file_id}{extension}"
         with open(file_name, "wb") as file:
             file.write(data_bytes)
 
         return file_name
+
+    @staticmethod
+    def _detect_extension(data_bytes):
+        """파일 바이너리 시그니처로 확장자를 추정합니다."""
+        if data_bytes[:8] == b'\x89PNG\r\n\x1a\n':
+            return ".png"
+        elif data_bytes[:2] == b'\xff\xd8':
+            return ".jpeg"
+        elif data_bytes[:4] == b'GIF8':
+            return ".gif"
+        elif data_bytes[:4] == b'%PDF':
+            return ".pdf"
+        elif data_bytes[:2] == b'PK':
+            return ".zip"
+        elif data_bytes[:4] == b'RIFF':
+            return ".webp"
+        else:
+            return ""

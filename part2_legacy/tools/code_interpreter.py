@@ -1,5 +1,6 @@
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
+import json
 
 
 # 모듈 레벨 변수 - LangGraph가 별도 스레드에서 tool을 실행하므로
@@ -38,7 +39,14 @@ def code_interpreter_tool(code):
     - files: Code Interpreter가 저장한 파일의 경로
         - 파일은 `./files/` 아래에 저장됩니다.
     """
-    print("\n\n=== Executing Code ===")
+    print("\n\n=== Executing Code (Assistants API) ===")
     print(code)
-    print("=====================\n\n")
-    return _code_interpreter_client.run(code)
+    print("==========================================\n\n")
+
+    text_result, file_names = _code_interpreter_client.run(code)
+
+    # 결과를 명확한 형식으로 포맷팅
+    if file_names:
+        return json.dumps([text_result, file_names], ensure_ascii=False)
+    else:
+        return json.dumps([text_result, []], ensure_ascii=False)
